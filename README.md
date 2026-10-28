@@ -1,5 +1,20 @@
-# Automatic-Number-Plate-Recognition-YOLOv8
-## Demo
+# Automatic-Number-Plate-Recognition-YOLOv8 (Sonora & México Edition)
+
+> 📖 **[Ver Documento Completo del Proceso y Modificaciones (PROCESO.md)](PROCESO.md)**  
+> 📱 **[Descargar App Android Offline (.apk)](ALPR_Sonora.apk)**
+
+Sistema integral de reconocimiento automático de matrículas para Sonora y México con YOLOv8, estimador de velocidad vehicular cinemático y aplicación móvil nativa offline.
+
+### 🌟 Nuevas Características Integradas:
+1. **Soporte Placas de Sonora y México**: Reconocimiento de formatos `WAB1234`, `WAB123A`, `WAA123` y sanitización de caracteres confusos de OCR (`0/O`, `1/I`, etc.).
+2. **Estimador de Velocidad (`speed_estimator.py`)**: Cálculo de velocidad en km/h mediante homografía planar 2D y filtrado exponencial EMA.
+3. **Estilo Gráfico Avanzado (`out.mp4`)**: Brackets esquineros verdes, recuadro rojo en placa y pancarta flotante blanca con texto negro en negrita.
+4. **App Android Nativa 100% Offline (`android_app/`)**: Aplicación compilada en Jetpack Compose con CameraX y Google ML Kit OCR local (`ALPR_Sonora.apk`), funcionando sin internet ni PC.
+5. **Servidor Móvil Web (`mobile_server.py`)**: Servidor streaming PWA con FastAPI y WebSockets.
+
+---
+
+## Demo Original
 
 
 https://github.com/Muhammad-Zeerak-Khan/Automatic-License-Plate-Recognition-using-YOLOv8/assets/79400407/1af57131-3ada-470a-b798-95fff00254e6

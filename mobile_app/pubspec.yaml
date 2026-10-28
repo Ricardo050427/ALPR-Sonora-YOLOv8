@@ -1,0 +1,26 @@
+name: alpr_sonora_app
+description: "Aplicacion movil de reconocimiento de matriculas ALPR en tiempo real"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.11.0
+  google_mlkit_text_recognition: ^0.13.0
+  onnxruntime: ^1.2.0
+  image: ^4.2.0
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/license_plate_detector.onnx

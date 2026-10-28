@@ -24,6 +24,10 @@ def draw_border(img, top_left, bottom_right, color=(0, 255, 0), thickness=10, li
     return img
 
 
+def parse_bbox(bbox_str):
+    return [float(x) for x in str(bbox_str).replace('[', '').replace(']', '').replace(',', ' ').split()]
+
+
 results = pd.read_csv('./test_interpolated.csv')
 
 # load video
@@ -40,19 +44,22 @@ license_plate = {}
 for car_id in np.unique(results['car_id']):
     max_ = np.amax(results[results['car_id'] == car_id]['license_number_score'])
     license_plate[car_id] = {'license_crop': None,
-                             'license_plate_number': results[(results['car_id'] == car_id) &
-                                                             (results['license_number_score'] == max_)]['license_number'].iloc[0]}
+                             'license_plate_number': str(results[(results['car_id'] == car_id) &
+                                                             (results['license_number_score'] == max_)]['license_number'].iloc[0])}
     cap.set(cv2.CAP_PROP_POS_FRAMES, results[(results['car_id'] == car_id) &
                                              (results['license_number_score'] == max_)]['frame_nmr'].iloc[0])
     ret, frame = cap.read()
 
-    x1, y1, x2, y2 = ast.literal_eval(results[(results['car_id'] == car_id) &
-                                              (results['license_number_score'] == max_)]['license_plate_bbox'].iloc[0].replace('[ ', '[').replace('   ', ' ').replace('  ', ' ').replace(' ', ','))
+    try:
+        x1, y1, x2, y2 = parse_bbox(results[(results['car_id'] == car_id) &
+                                                  (results['license_number_score'] == max_)]['license_plate_bbox'].iloc[0])
 
-    license_crop = frame[int(y1):int(y2), int(x1):int(x2), :]
-    license_crop = cv2.resize(license_crop, (int((x2 - x1) * 400 / (y2 - y1)), 400))
-
-    license_plate[car_id]['license_crop'] = license_crop
+        license_crop = frame[int(y1):int(y2), int(x1):int(x2), :]
+        if license_crop.shape[0] > 0 and license_crop.shape[1] > 0 and int(y2 - y1) > 0:
+            license_crop = cv2.resize(license_crop, (int((x2 - x1) * 400 / (y2 - y1)), 400))
+            license_plate[car_id]['license_crop'] = license_crop
+    except Exception:
+        pass
 
 
 frame_nmr = -1
@@ -68,42 +75,42 @@ while ret:
         df_ = results[results['frame_nmr'] == frame_nmr]
         for row_indx in range(len(df_)):
             # draw car
-            car_x1, car_y1, car_x2, car_y2 = ast.literal_eval(df_.iloc[row_indx]['car_bbox'].replace('[ ', '[').replace('   ', ' ').replace('  ', ' ').replace(' ', ','))
+            car_x1, car_y1, car_x2, car_y2 = parse_bbox(df_.iloc[row_indx]['car_bbox'])
             draw_border(frame, (int(car_x1), int(car_y1)), (int(car_x2), int(car_y2)), (0, 255, 0), 25,
                         line_length_x=200, line_length_y=200)
 
             # draw license plate
-            x1, y1, x2, y2 = ast.literal_eval(df_.iloc[row_indx]['license_plate_bbox'].replace('[ ', '[').replace('   ', ' ').replace('  ', ' ').replace(' ', ','))
+            x1, y1, x2, y2 = parse_bbox(df_.iloc[row_indx]['license_plate_bbox'])
             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 12)
 
             # crop license plate
-            license_crop = license_plate[df_.iloc[row_indx]['car_id']]['license_crop']
+            license_crop = license_plate.get(df_.iloc[row_indx]['car_id'], {}).get('license_crop')
 
-            H, W, _ = license_crop.shape
+            if license_crop is not None:
+                H, W, _ = license_crop.shape
+                try:
+                    frame[int(car_y1) - H - 100:int(car_y1) - 100,
+                          int((car_x2 + car_x1 - W) / 2):int((car_x2 + car_x1 + W) / 2), :] = license_crop
 
-            try:
-                frame[int(car_y1) - H - 100:int(car_y1) - 100,
-                      int((car_x2 + car_x1 - W) / 2):int((car_x2 + car_x1 + W) / 2), :] = license_crop
+                    frame[int(car_y1) - H - 400:int(car_y1) - H - 100,
+                          int((car_x2 + car_x1 - W) / 2):int((car_x2 + car_x1 + W) / 2), :] = (255, 255, 255)
 
-                frame[int(car_y1) - H - 400:int(car_y1) - H - 100,
-                      int((car_x2 + car_x1 - W) / 2):int((car_x2 + car_x1 + W) / 2), :] = (255, 255, 255)
+                    (text_width, text_height), _ = cv2.getTextSize(
+                        license_plate[df_.iloc[row_indx]['car_id']]['license_plate_number'],
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        4.3,
+                        17)
 
-                (text_width, text_height), _ = cv2.getTextSize(
-                    license_plate[df_.iloc[row_indx]['car_id']]['license_plate_number'],
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    4.3,
-                    17)
+                    cv2.putText(frame,
+                                license_plate[df_.iloc[row_indx]['car_id']]['license_plate_number'],
+                                (int((car_x2 + car_x1 - text_width) / 2), int(car_y1 - H - 250 + (text_height / 2))),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        4.3,
+                        (0, 0, 0),
+                        17)
 
-                cv2.putText(frame,
-                            license_plate[df_.iloc[row_indx]['car_id']]['license_plate_number'],
-                            (int((car_x2 + car_x1 - text_width) / 2), int(car_y1 - H - 250 + (text_height / 2))),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            4.3,
-                            (0, 0, 0),
-                            17)
-
-            except:
-                pass
+                except:
+                    pass
 
         out.write(frame)
         frame = cv2.resize(frame, (1280, 720))

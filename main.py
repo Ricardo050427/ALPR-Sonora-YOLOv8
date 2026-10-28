@@ -36,7 +36,7 @@ while ret:
                 detections_.append([x1, y1, x2, y2, score])
 
         # track vehicles
-        track_ids = mot_tracker.update(np.asarray(detections_))
+        track_ids = mot_tracker.update(np.asarray(detections_) if len(detections_) > 0 else np.empty((0, 5)))
 
         # detect license plates
         license_plates = license_plate_detector(frame)[0]

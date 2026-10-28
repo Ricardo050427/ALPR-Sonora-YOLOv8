@@ -5,19 +5,153 @@ import easyocr
 reader = easyocr.Reader(['en'], gpu=False)
 
 # Mapping dictionaries for character conversion
+# Expanded character conversion dictionaries
 dict_char_to_int = {'O': '0',
                     'I': '1',
                     'J': '3',
                     'A': '4',
                     'G': '6',
-                    'S': '5'}
+                    'S': '5',
+                    'B': '8',
+                    'Z': '2',
+                    'T': '7'}
 
 dict_int_to_char = {'0': 'O',
                     '1': 'I',
                     '3': 'J',
                     '4': 'A',
                     '6': 'G',
-                    '5': 'S'}
+                    '5': 'S',
+                    '8': 'B',
+                    '2': 'Z',
+                    '7': 'T'}
+
+# Recognized format masks ('L' for letter, 'D' for digit)
+# 1. Sonora / México particular (e.g. WYZ1234)
+# 2. Sonora / México SCT nuevo (e.g. WYZ123A)
+# 3. Sonora / México clásico (e.g. WYZ123)
+# 4. UK / Europa demo original (e.g. CE61VYL)
+SUPPORTED_MASKS = [
+    ['L', 'L', 'L', 'D', 'D', 'D', 'D'],  # Sonora / México 7 (LLLDDDD)
+    ['L', 'L', 'L', 'D', 'D', 'D', 'L'],  # Sonora SCT nuevo (LLLDDDL)
+    ['L', 'L', 'L', 'D', 'D', 'D'],       # Sonora clásico 6 (LLLDDD)
+    ['L', 'L', 'D', 'D', 'L', 'L', 'L'],  # UK original (LLDDLLL)
+]
+
+BLACKLIST_WORDS = {'SONORA', 'MEXICO', 'TRANSPORTE', 'PRIVADO', 'GOBIERNO', 'ESTADO', 'FRONTERA'}
+
+
+def check_and_format_mask(text, mask):
+    """
+    Checks if text matches mask length and character types, correcting ambiguous characters.
+    Tracks number of character conversions to prevent converting arbitrary text/numbers.
+    """
+    if len(text) != len(mask):
+        return None, 999
+
+    formatted = []
+    conversions = 0
+    digits = set(string.digits)
+    letters = set(string.ascii_uppercase)
+
+    for char, required_type in zip(text, mask):
+        if required_type == 'L':
+            if char in letters:
+                formatted.append(char)
+            elif char in dict_int_to_char:
+                formatted.append(dict_int_to_char[char])
+                conversions += 1
+            else:
+                return None, 999
+        elif required_type == 'D':
+            if char in digits:
+                formatted.append(char)
+            elif char in dict_char_to_int:
+                formatted.append(dict_char_to_int[char])
+                conversions += 1
+            else:
+                return None, 999
+        else:
+            return None, 999
+
+    # Maximum 2 ambiguous conversions allowed to avoid hallucinating false positives
+    if conversions > 2:
+        return None, 999
+
+    return ''.join(formatted), conversions
+
+
+def format_license(text):
+    """
+    Format and validate license plate against Sonora, Mexican, and UK patterns.
+    Picks the pattern requiring the minimum number of character conversions.
+    """
+    clean_text = text.upper().replace(' ', '').replace('-', '').replace('.', '')
+
+    if clean_text in BLACKLIST_WORDS:
+        return None
+
+    best_formatted = None
+    min_conversions = 999
+
+    for mask in SUPPORTED_MASKS:
+        formatted, conv = check_and_format_mask(clean_text, mask)
+        if formatted is not None and conv < min_conversions:
+            best_formatted = formatted
+            min_conversions = conv
+            if min_conversions == 0:
+                break
+
+    return best_formatted
+
+
+def license_complies_format(text):
+    """
+    Check if the license plate text complies with any supported format.
+    """
+    return format_license(text) is not None
+
+
+def read_license_plate(license_plate_crop):
+    """
+    Read the license plate text from cropped image, with fallback to central band crop
+    to discard state banners like 'SONORA' or 'MEXICO'.
+    """
+    if license_plate_crop is None or getattr(license_plate_crop, 'size', 0) == 0:
+        return None, None
+
+    # Step 1: Read full crop
+    detections = reader.readtext(license_plate_crop)
+
+    for detection in detections:
+        bbox, text, score = detection
+        clean_text = text.upper().replace(' ', '').replace('-', '').replace('.', '')
+
+        if clean_text in BLACKLIST_WORDS:
+            continue
+
+        formatted_plate = format_license(clean_text)
+        if formatted_plate is not None:
+            return formatted_plate, score
+
+    # Step 2: Fallback for Mexican plates - crop out top 18% and bottom 18% (state banners)
+    h, w = license_plate_crop.shape[:2]
+    if h > 20 and w > 40:
+        central_crop = license_plate_crop[int(h * 0.18):int(h * 0.82), :]
+        detections_central = reader.readtext(central_crop)
+
+        for detection in detections_central:
+            bbox, text, score = detection
+            clean_text = text.upper().replace(' ', '').replace('-', '').replace('.', '')
+
+            if clean_text in BLACKLIST_WORDS:
+                continue
+
+            formatted_plate = format_license(clean_text)
+            if formatted_plate is not None:
+                return formatted_plate, score
+
+    return None, None
 
 
 def write_csv(results, output_path):
@@ -35,7 +169,6 @@ def write_csv(results, output_path):
 
         for frame_nmr in results.keys():
             for car_id in results[frame_nmr].keys():
-                print(results[frame_nmr][car_id])
                 if 'car' in results[frame_nmr][car_id].keys() and \
                    'license_plate' in results[frame_nmr][car_id].keys() and \
                    'text' in results[frame_nmr][car_id]['license_plate'].keys():
@@ -56,77 +189,6 @@ def write_csv(results, output_path):
                                                             results[frame_nmr][car_id]['license_plate']['text_score'])
                             )
         f.close()
-
-
-def license_complies_format(text):
-    """
-    Check if the license plate text complies with the required format.
-
-    Args:
-        text (str): License plate text.
-
-    Returns:
-        bool: True if the license plate complies with the format, False otherwise.
-    """
-    if len(text) != 7:
-        return False
-
-    if (text[0] in string.ascii_uppercase or text[0] in dict_int_to_char.keys()) and \
-       (text[1] in string.ascii_uppercase or text[1] in dict_int_to_char.keys()) and \
-       (text[2] in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'] or text[2] in dict_char_to_int.keys()) and \
-       (text[3] in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'] or text[3] in dict_char_to_int.keys()) and \
-       (text[4] in string.ascii_uppercase or text[4] in dict_int_to_char.keys()) and \
-       (text[5] in string.ascii_uppercase or text[5] in dict_int_to_char.keys()) and \
-       (text[6] in string.ascii_uppercase or text[6] in dict_int_to_char.keys()):
-        return True
-    else:
-        return False
-
-
-def format_license(text):
-    """
-    Format the license plate text by converting characters using the mapping dictionaries.
-
-    Args:
-        text (str): License plate text.
-
-    Returns:
-        str: Formatted license plate text.
-    """
-    license_plate_ = ''
-    mapping = {0: dict_int_to_char, 1: dict_int_to_char, 4: dict_int_to_char, 5: dict_int_to_char, 6: dict_int_to_char,
-               2: dict_char_to_int, 3: dict_char_to_int}
-    for j in [0, 1, 2, 3, 4, 5, 6]:
-        if text[j] in mapping[j].keys():
-            license_plate_ += mapping[j][text[j]]
-        else:
-            license_plate_ += text[j]
-
-    return license_plate_
-
-
-def read_license_plate(license_plate_crop):
-    """
-    Read the license plate text from the given cropped image.
-
-    Args:
-        license_plate_crop (PIL.Image.Image): Cropped image containing the license plate.
-
-    Returns:
-        tuple: Tuple containing the formatted license plate text and its confidence score.
-    """
-
-    detections = reader.readtext(license_plate_crop)
-
-    for detection in detections:
-        bbox, text, score = detection
-
-        text = text.upper().replace(' ', '')
-
-        if license_complies_format(text):
-            return format_license(text), score
-
-    return None, None
 
 
 def get_car(license_plate, vehicle_track_ids):

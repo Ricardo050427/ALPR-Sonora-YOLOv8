@@ -166,3 +166,9 @@ test_interpolated.csv
 test.csv
 out.mp4
 yolov8n.pt
+cert.pem
+key.pem
+**/build/
+.gradle/
+*.iml
+.idea/
