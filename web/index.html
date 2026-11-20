@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0B0F14">
+  <meta name="description" content="Reconocimiento de placas de Sonora con YOLOv8 y estimación de velocidad, directo en el navegador.">
+  <title>ALPR Sonora</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="vendor/ort/ort.wasm.min.js"></script>
+  <script src="vendor/tesseract/tesseract.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot" id="statusDot"></span>
+      <span class="brand-name">ALPR SONORA</span>
+      <span class="status" id="statusText">Cargando…</span>
+    </div>
+    <div class="actions">
+      <button class="icon-btn hidden" id="torchBtn" title="Linterna" aria-label="Linterna">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6l-1 6h3l-7 14 1-9H7z"/></svg>
+      </button>
+      <button class="icon-btn" id="sourceBtn" title="Cambiar fuente" aria-label="Cambiar fuente">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3v13H4z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button class="icon-btn" id="historyBtn" title="Historial" aria-label="Historial">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 12h14M5 19h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span class="badge hidden" id="historyCount">0</span>
+      </button>
+      <button class="icon-btn" id="settingsBtn" title="Ajustes" aria-label="Ajustes">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="view"></canvas>
+
+    <section class="start" id="start">
+      <h1>Placas y velocidad en tiempo real</h1>
+      <p>YOLOv8 detecta vehículos y placas, el OCR lee la matrícula con las reglas de Sonora y la velocidad se estima por vehículo. Todo corre en tu navegador: ninguna imagen sale del dispositivo.</p>
+      <div class="start-actions">
+        <button class="btn primary" id="cameraBtn" disabled>Usar cámara</button>
+        <button class="btn" id="fileBtn" disabled>Abrir video</button>
+        <button class="btn" id="demoBtn" disabled>Ver demo</button>
+      </div>
+      <div class="progress" id="progress"><div class="bar" id="progressBar"></div></div>
+      <p class="hint" id="loadHint">Descargando modelos (≈ 45 MB la primera vez)…</p>
+    </section>
+
+    <div class="zoombar hidden" id="zoombar">
+      <button class="zoom-chip" data-zoom="1">1×</button>
+      <button class="zoom-chip" data-zoom="2">2×</button>
+      <button class="zoom-chip" data-zoom="4">4×</button>
+      <input type="range" id="zoomRange" min="1" max="8" step="0.1" value="1" aria-label="Zoom">
+      <span class="zoom-value" id="zoomValue">1.0×</span>
+    </div>
+
+    <div class="videobar hidden" id="videobar">
+      <button class="icon-btn small" id="playBtn" aria-label="Reproducir o pausar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIcon" d="M8 5v14l11-7z"/></svg>
+      </button>
+      <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Posición del video">
+      <select id="rate" aria-label="Velocidad de reproducción">
+        <option value="1">1×</option>
+        <option value="0.5" selected>0.5×</option>
+        <option value="0.25">0.25×</option>
+      </select>
+    </div>
+
+    <div class="perf" id="perf"></div>
+  </main>
+
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Historial</h2>
+      <div>
+        <button class="btn small" id="csvBtn">CSV</button>
+        <button class="btn small" id="closeDrawer">Cerrar</button>
+      </div>
+    </div>
+    <ul class="history" id="historyList"></ul>
+    <p class="empty-note" id="historyEmpty">Aún no hay placas leídas en esta sesión.</p>
+  </aside>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>Ajustes de velocidad</h2>
+      <p class="hint">La velocidad se estima con el tamaño aparente del vehículo. Para que sea precisa, el campo de visión debe coincidir con tu cámara.</p>
+      <label>Campo de visión horizontal <output id="fovOut">66°</output>
+        <input type="range" id="fov" min="8" max="100" step="1" value="66">
+      </label>
+      <label>Ancho promedio del vehículo <output id="widthOut">1.80 m</output>
+        <input type="range" id="vehWidth" min="1.4" max="2.6" step="0.05" value="1.8">
+      </label>
+      <label>Confianza mínima de detección <output id="confOut">0.35</output>
+        <input type="range" id="conf" min="0.15" max="0.8" step="0.05" value="0.35">
+      </label>
+      <div class="dialog-actions"><button class="btn primary" value="ok">Listo</button></div>
+    </form>
+  </dialog>
+
+  <input type="file" id="fileInput" accept="video/*" hidden>
+</body>
+</html>

@@ -1,0 +1,6 @@
+# Deploy the browser version (web/) when this repository is connected to Netlify.
+# No build step: the folder is already static.
+[build]
+  base = "web"
+  publish = "."
+  command = ""
