@@ -4,6 +4,9 @@ La app de Android (`ALPR_Sonora.apk`) hace todo dentro del teléfono: detecta el
 estima la velocidad y funciona **sin internet**. Para usar el sistema desde un celular es la opción recomendada:
 la versión web de la carpeta `Neflity` corre en el navegador y en un celular es mucho más lenta.
 
+En [`video_prueba_velocidad.mp4`](video_prueba_velocidad.mp4) se ve cómo se muestra la información: el clip de
+prueba procesado con el mismo código de la app, con la placa, su recorte y la velocidad estimada de cada vehículo.
+
 ## Requisitos
 
 - Teléfono **Android 7.0 o más nuevo**, con procesador ARM (prácticamente todos los celulares actuales).
