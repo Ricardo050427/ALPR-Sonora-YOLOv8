@@ -1,0 +1,5 @@
+# Sitio estático: no hay paso de build.
+# Si conectas el repositorio en Netlify, pon "Base directory" = Neflity.
+[build]
+  publish = "."
+  command = ""

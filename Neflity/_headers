@@ -1,0 +1,26 @@
+# Netlify headers (also read when the folder is deployed by drag and drop)
+
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: same-origin
+  Permissions-Policy: camera=(self)
+  X-Content-Type-Options: nosniff
+
+/*.wasm
+  Content-Type: application/wasm
+
+/*.mjs
+  Content-Type: text/javascript
+
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+
+/sw.js
+  Cache-Control: no-cache
+
+/models/*
+  Cache-Control: public, max-age=604800
+
+/vendor/*
+  Cache-Control: public, max-age=604800
